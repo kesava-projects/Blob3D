@@ -40,7 +40,10 @@ public class BlobManager : MonoBehaviour
             ApplyMode();
         }
 
-        // Jump
+        if (Input.GetKeyDown(KeyCode.X))
+            MergeZone.Instance?.TrySplit();
+
+        // Jump (RobotFreeAnim Space/roll is disabled on blob avatars)
         if (Input.GetKeyDown(KeyCode.Space))
         {
             if (blobOne != null && blobOne.IsControlled) blobOne.Jump();
@@ -63,6 +66,8 @@ public class BlobManager : MonoBehaviour
         if (blobOne != null) blobOne.SetControlled(Mode != ControlMode.OnlySecond);
         if (blobTwo != null) blobTwo.SetControlled(Mode != ControlMode.OnlyFirst);
     }
+
+    public void ReapplyControlMode() => ApplyMode();
 
     public string GetModeLabel() => Mode switch
     {

@@ -48,6 +48,31 @@ public class BlobController : MonoBehaviour
 
     public bool IsControlled => controlled;
 
+    /// <summary>
+    /// After unite/split changes blob sphere scale: updates squish baseline and ground ray only.
+    /// Does not rescale the RobotSphere (that was shrinking avatars and breaking split visuals).
+    /// </summary>
+    public void RefreshMovementBaseline()
+    {
+        baseScale = transform.localScale;
+
+        var sc = GetComponent<SphereCollider>();
+        if (sc != null)
+        {
+            float m = Mathf.Max(
+                Mathf.Abs(transform.lossyScale.x),
+                Mathf.Abs(transform.lossyScale.y),
+                Mathf.Abs(transform.lossyScale.z));
+            float worldRadius = sc.radius * m;
+            groundCheckDist = Mathf.Max(0.35f, worldRadius * 1.12f);
+        }
+        else
+        {
+            float m = Mathf.Max(transform.localScale.x, transform.localScale.y, transform.localScale.z);
+            groundCheckDist = Mathf.Max(0.4f, m * 0.62f);
+        }
+    }
+
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
     void Awake()
@@ -89,6 +114,9 @@ public class BlobController : MonoBehaviour
         }
         else
             facingYaw = transform.eulerAngles.y;
+
+        foreach (var rfa in GetComponentsInChildren<RobotFreeAnim>(true))
+            rfa.disableInput = true;
 
         rb.linearDamping  = 5f;
         rb.angularDamping = 5f;

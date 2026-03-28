@@ -34,6 +34,13 @@ public class GameManager : MonoBehaviour
         Invoke(nameof(Reload), 3.5f);
     }
 
+    /// <summary>Used when splitting with X during the win countdown — abort reload and hide win UI.</summary>
+    public void CancelPendingReloadAndWin()
+    {
+        CancelInvoke(nameof(Reload));
+        complete = false;
+    }
+
     // ── GUI ────────────────────────────────────────────────────────────────
 
     void OnGUI()
@@ -56,8 +63,8 @@ public class GameManager : MonoBehaviour
         };
 
         string mode = BlobManager.Instance.GetModeLabel();
-        GUI.Box(new Rect(12f, 12f, 380f, 48f),
-            $"Control: {mode}\n<size=12>[TAB] cycle · [WASD] move · [SPACE] jump · [X] separate</size>", boxStyle);
+        GUI.Box(new Rect(12f, 12f, 420f, 64f),
+            $"Control: {mode}\n<size=12>[TAB] · [WASD] move/turn · [SPACE] jump · close = unite · [X] split (move apart before re-unite) · win on pad (2 blobs or merged)</size>", boxStyle);
     }
 
     void DrawWinScreen()
