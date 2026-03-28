@@ -7,19 +7,22 @@ using UnityEngine;
 /// Editor-only tool.
 /// Menu: Blob3D ▶ Build Level 01  (shortcut: Ctrl/Cmd+Shift+B)
 ///
-/// Procedurally creates the full Level01 scene:
+/// Procedurally creates the full Level01 scene as an enclosed interior room:
 ///
-///   LEFT ZONE (x < 0)         │  RIGHT ZONE (x > 0)
+///   LEFT ROOM (x < 0)          │  RIGHT ROOM (x > 0)
 ///   ─────────────────────────────────────────────────
 ///   [B1][B2]  [PushCube]  [BTN]  ║[GATE]║  [obstacles]  [MERGE ZONE]
 ///                                 ║      ║
-///   Dividing wall with gate in   ─╝      ╚─  the gap.
+///   Beige walls + screens        ─╝      ╚─  dark floor + furniture
 ///
-/// Puzzle: Push the purple cube onto the red button → gate rises →
-///         guide both blobs to the merge zone → level complete.
+/// Interior: beige/cream walls, ceiling, wall-mounted screens/pictures,
+/// furniture (desks, monitors, boxes), pink gate doorway, warm lighting.
 /// </summary>
 public static class SceneBuilder
 {
+    private const string RobotSpherePrefabPath =
+        "Assets/RobotSphere/Assets/Prefab/robotSphere.prefab";
+
     [MenuItem("Blob3D/Build Level 01 %#b")]
     public static void BuildLevel()
     {
@@ -31,59 +34,68 @@ public static class SceneBuilder
         var scene = EditorSceneManager.NewScene(
             NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-        // 3. Render settings – deep space look
-        RenderSettings.ambientLight = new Color(0.04f, 0.04f, 0.14f);
+        // 3. Render settings – warm indoor look
+        RenderSettings.ambientLight = new Color(0.35f, 0.32f, 0.28f);
         RenderSettings.fog          = false;
 
-        // ── Lighting ──────────────────────────────────────────────────────
+        // ── Lighting (warm interior) ──────────────────────────────────────
         var sunGO = new GameObject("Sun");
         var sun   = sunGO.AddComponent<Light>();
         sun.type      = LightType.Directional;
-        sun.color     = new Color(0.75f, 0.82f, 1f);
-        sun.intensity = 0.85f;
-        sunGO.transform.rotation = Quaternion.Euler(45f, -40f, 0f);
+        sun.color     = new Color(1f, 0.95f, 0.85f);
+        sun.intensity = 1.1f;
+        sunGO.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+
+        // Fill light for softer shadows
+        var fillGO = new GameObject("FillLight");
+        var fill   = fillGO.AddComponent<Light>();
+        fill.type      = LightType.Directional;
+        fill.color     = new Color(0.6f, 0.65f, 0.8f);
+        fill.intensity = 0.35f;
+        fillGO.transform.rotation = Quaternion.Euler(30f, 140f, 0f);
 
         // ── Floor ─────────────────────────────────────────────────────────
         BuildFloor();
 
-        // ── Outer boundary walls ──────────────────────────────────────────
-        // North / South walls span the full width including the dividing wall
-        BuildWall("Wall_N", new Vector3( 0f, 1f,  9.5f), new Vector3(38f, 2f, 1f), WallColor);
-        BuildWall("Wall_S", new Vector3( 0f, 1f, -9.5f), new Vector3(38f, 2f, 1f), WallColor);
-        BuildWall("Wall_W", new Vector3(-19f, 1f, 0f),   new Vector3(1f, 2f, 20f), WallColor);
-        BuildWall("Wall_E", new Vector3( 19f, 1f, 0f),   new Vector3(1f, 2f, 20f), WallColor);
+        // ── Ceiling ───────────────────────────────────────────────────────
+        BuildCeiling();
 
-        // ── Dividing wall (forces blobs to use the gate) ──────────────────
-        // Gate opening occupies z = -1.5 … +1.5  (gate scale Z = 3)
-        // Wall sections fill the rest of the dividing line at x = 0
-        BuildWall("DivWall_N", new Vector3(0f, 1f,  5.5f), new Vector3(1.2f, 2f, 8f), DivColor);
-        BuildWall("DivWall_S", new Vector3(0f, 1f, -5.5f), new Vector3(1.2f, 2f, 8f), DivColor);
+        // ── Outer boundary walls (beige interior) ─────────────────────────
+        BuildWall("Wall_N", new Vector3( 0f, 2f,  9.5f), new Vector3(38f, 4f, 0.5f), WallBeige);
+        BuildWall("Wall_S", new Vector3( 0f, 2f, -9.5f), new Vector3(38f, 4f, 0.5f), WallBeige);
+        BuildWall("Wall_W", new Vector3(-19f, 2f, 0f),   new Vector3(0.5f, 4f, 20f), WallBeige);
+        BuildWall("Wall_E", new Vector3( 19f, 2f, 0f),   new Vector3(0.5f, 4f, 20f), WallGrey);
 
-        // ── Gate ──────────────────────────────────────────────────────────
-        // Sits in the dividing-wall gap.  openHeight lifts it clear of blobs.
-        var gateGO = BuildGate(new Vector3(0f, 1.5f, 0f));
+        // ── Dividing wall (forces blobs to use the gate doorway) ──────────
+        BuildWall("DivWall_N", new Vector3(0f, 2f,  5.5f), new Vector3(1.2f, 4f, 8f), DivWallColor);
+        BuildWall("DivWall_S", new Vector3(0f, 2f, -5.5f), new Vector3(1.2f, 4f, 8f), DivWallColor);
+
+        // ── Gate (pink doorway) ───────────────────────────────────────────
+        BuildGate(new Vector3(0f, 2f, 0f));
 
         // ── Pressure button ───────────────────────────────────────────────
-        // Positioned left of the gate; player pushes the cube here.
-        var btnGO = BuildButton(new Vector3(-4f, 0.06f, -6f));
-
-        // Button → Gate is wired at runtime by LevelWiring (avoids batch-mode
-        // serialisation issues with UnityEventTools in headless mode).
+        BuildButton(new Vector3(-4f, 0.06f, -6f));
 
         // ── Pushable cube ─────────────────────────────────────────────────
-        // Purple cube the player rolls onto the button.
         BuildPushable("PushCube", new Vector3(-9f, 0.45f, -5.5f));
 
-        // ── Static obstacle cubes (right zone, add some challenge) ────────
+        // ── Static obstacle cubes (right zone) ────────────────────────────
         BuildObstacle("Obs_1", new Vector3( 5f, 0.5f,  4f));
         BuildObstacle("Obs_2", new Vector3( 5f, 0.5f, -4f));
         BuildObstacle("Obs_3", new Vector3( 9f, 0.5f,  2.5f));
         BuildObstacle("Obs_4", new Vector3(10f, 0.5f, -2.5f));
         BuildObstacle("Obs_5", new Vector3(14f, 0.5f,  3.5f));
 
+        // ── Wall-mounted screens / pictures ───────────────────────────────
+        BuildWallScreens();
+
+        // ── Interior furniture ────────────────────────────────────────────
+        BuildFurniture();
+
         // ── Blobs ─────────────────────────────────────────────────────────
-        var b1GO = BuildBlob("BlobOne", new Vector3(-14f, 0.425f,  1.2f), BlobOneColor);
-        var b2GO = BuildBlob("BlobTwo", new Vector3(-14f, 0.425f, -1.2f), BlobTwoColor);
+        var robotPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(RobotSpherePrefabPath);
+        var b1GO = BuildBlob("BlobOne", new Vector3(-14f, 0.425f,  1.2f), BlobOneColor, robotPrefab);
+        var b2GO = BuildBlob("BlobTwo", new Vector3(-14f, 0.425f, -1.2f), BlobTwoColor, robotPrefab);
 
         // ── Merge zone ────────────────────────────────────────────────────
         BuildMergeZone(new Vector3(15f, 0.06f, 0f));
@@ -92,6 +104,7 @@ public static class SceneBuilder
         var managers = new GameObject("Managers");
         managers.AddComponent<GameManager>();
         managers.AddComponent<LevelWiring>();
+        managers.AddComponent<BlobPhysicsTuner>();
         var bm  = managers.AddComponent<BlobManager>();
         bm.blobOne = b1GO.GetComponent<BlobController>();
         bm.blobTwo = b2GO.GetComponent<BlobController>();
@@ -101,18 +114,24 @@ public static class SceneBuilder
         camGO.tag = "MainCamera";
         var cam = camGO.AddComponent<Camera>();
         camGO.AddComponent<AudioListener>();
-        cam.backgroundColor = new Color(0.01f, 0.01f, 0.10f);
+        cam.backgroundColor = new Color(0.08f, 0.08f, 0.12f);
         cam.clearFlags      = CameraClearFlags.SolidColor;
         cam.farClipPlane    = 250f;
 
         var cc  = camGO.AddComponent<CameraController>();
         cc.blobOne = b1GO.transform;
         cc.blobTwo = b2GO.transform;
-        camGO.transform.position = new Vector3(0f, 14f, -10f);
+        cc.tppHeightBase      = 6f;
+        cc.tppDistance         = 5f;
+        cc.tppLookHeightOffset = 1.2f;
+        cc.tppSmoothSpeed      = 7f;
+        cc.combinedHeightBase  = 10f;
+        cc.combinedMaxHeight   = 20f;
+        cc.combinedZOffset     = -5f;
+        cc.velocityLookaheadScale = 0.2f;
+        cc.maxLookaheadDistance   = 2.5f;
+        camGO.transform.position = new Vector3(0f, 10f, -8f);
         camGO.transform.LookAt(Vector3.zero);
-
-        // ── Starfield ─────────────────────────────────────────────────────
-        BuildStarfield();
 
         // ── Save ──────────────────────────────────────────────────────────
         Directory.CreateDirectory("Assets/Scenes");
@@ -124,7 +143,7 @@ public static class SceneBuilder
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    //  Builder helpers
+    //  Room structure
     // ════════════════════════════════════════════════════════════════════════
 
     static void BuildFloor()
@@ -134,7 +153,17 @@ public static class SceneBuilder
         go.transform.position   = new Vector3(0f, -0.5f, 0f);
         go.transform.localScale = new Vector3(38f, 1f, 20f);
         go.GetComponent<Renderer>().sharedMaterial =
-            GetOrCreateMat("FloorMat", new Color(0.07f, 0.07f, 0.18f), 0.5f, 0.65f);
+            GetOrCreateMat("FloorMat", FloorColor, 0.3f, 0.55f);
+    }
+
+    static void BuildCeiling()
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = "Ceiling";
+        go.transform.position   = new Vector3(0f, 4.25f, 0f);
+        go.transform.localScale = new Vector3(38f, 0.5f, 20f);
+        go.GetComponent<Renderer>().sharedMaterial =
+            GetOrCreateMat("CeilingMat", CeilingColor, 0f, 0.2f);
     }
 
     static void BuildWall(string name, Vector3 pos, Vector3 scale, Color col)
@@ -144,10 +173,143 @@ public static class SceneBuilder
         go.transform.position   = pos;
         go.transform.localScale = scale;
         go.GetComponent<Renderer>().sharedMaterial =
-            GetOrCreateMat(name + "Mat", col, 0.25f, 0.35f);
+            GetOrCreateMat(name + "Mat", col, 0.05f, 0.25f);
     }
 
-    static GameObject BuildBlob(string name, Vector3 pos, Color col)
+    // ════════════════════════════════════════════════════════════════════════
+    //  Wall-mounted screens / pictures (like the reference image)
+    // ════════════════════════════════════════════════════════════════════════
+
+    static void BuildWallScreens()
+    {
+        Material screenDark  = GetOrCreateMat("ScreenDarkMat",
+            new Color(0.12f, 0.12f, 0.15f), 0.6f, 0.8f);
+        Material screenLight = GetOrCreateMat("ScreenLightMat",
+            new Color(0.65f, 0.68f, 0.72f), 0.4f, 0.6f);
+        Material screenBlue  = GetOrCreateMat("ScreenBlueMat",
+            new Color(0.2f, 0.3f, 0.5f), 0.5f, 0.7f,
+            emissive: true, emCol: new Color(0.05f, 0.08f, 0.15f));
+
+        // ── West wall screens (left room, main wall the blobs face) ──────
+        BuildScreen("Screen_W1", new Vector3(-18.6f, 2.8f, 4f),
+            new Vector3(0.08f, 1.2f, 1.8f), screenDark);
+        BuildScreen("Screen_W2", new Vector3(-18.6f, 2.2f, 1f),
+            new Vector3(0.08f, 0.8f, 1.2f), screenLight);
+        BuildScreen("Screen_W3", new Vector3(-18.6f, 3.2f, -1.5f),
+            new Vector3(0.08f, 0.6f, 0.9f), screenDark);
+        BuildScreen("Screen_W4", new Vector3(-18.6f, 1.5f, -3.5f),
+            new Vector3(0.08f, 1.0f, 1.4f), screenBlue);
+        BuildScreen("Screen_W5", new Vector3(-18.6f, 3.0f, -5.5f),
+            new Vector3(0.08f, 0.7f, 1.0f), screenLight);
+        BuildScreen("Screen_W6", new Vector3(-18.6f, 2.0f, 6.5f),
+            new Vector3(0.08f, 0.9f, 1.3f), screenBlue);
+        BuildScreen("Screen_W7", new Vector3(-18.6f, 3.5f, 2.5f),
+            new Vector3(0.08f, 0.5f, 0.7f), screenDark);
+
+        // ── North wall screens ────────────────────────────────────────────
+        BuildScreen("Screen_N1", new Vector3(-8f, 2.5f, 9.15f),
+            new Vector3(1.6f, 1.0f, 0.08f), screenDark);
+        BuildScreen("Screen_N2", new Vector3(-4f, 3.0f, 9.15f),
+            new Vector3(1.0f, 0.7f, 0.08f), screenLight);
+        BuildScreen("Screen_N3", new Vector3(6f, 2.3f, 9.15f),
+            new Vector3(1.4f, 0.9f, 0.08f), screenBlue);
+        BuildScreen("Screen_N4", new Vector3(12f, 3.2f, 9.15f),
+            new Vector3(0.8f, 0.6f, 0.08f), screenDark);
+
+        // ── South wall screens ────────────────────────────────────────────
+        BuildScreen("Screen_S1", new Vector3(-12f, 2.8f, -9.15f),
+            new Vector3(1.8f, 1.1f, 0.08f), screenLight);
+        BuildScreen("Screen_S2", new Vector3(-6f, 1.8f, -9.15f),
+            new Vector3(1.2f, 0.8f, 0.08f), screenDark);
+        BuildScreen("Screen_S3", new Vector3(8f, 2.6f, -9.15f),
+            new Vector3(1.5f, 1.0f, 0.08f), screenBlue);
+
+        // ── East wall screens ─────────────────────────────────────────────
+        BuildScreen("Screen_E1", new Vector3(18.6f, 2.5f, 3f),
+            new Vector3(0.08f, 1.0f, 1.5f), screenDark);
+        BuildScreen("Screen_E2", new Vector3(18.6f, 3.0f, -3f),
+            new Vector3(0.08f, 0.8f, 1.2f), screenLight);
+    }
+
+    static void BuildScreen(string name, Vector3 pos, Vector3 scale, Material mat)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name                 = name;
+        go.transform.position   = pos;
+        go.transform.localScale = scale;
+        go.isStatic             = true;
+        go.GetComponent<Renderer>().sharedMaterial = mat;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  Interior furniture
+    // ════════════════════════════════════════════════════════════════════════
+
+    static void BuildFurniture()
+    {
+        Material deskMat    = GetOrCreateMat("DeskMat",
+            new Color(0.45f, 0.38f, 0.30f), 0.1f, 0.3f);
+        Material monitorMat = GetOrCreateMat("MonitorMat",
+            new Color(0.15f, 0.15f, 0.18f), 0.5f, 0.7f);
+        Material boxMat     = GetOrCreateMat("BoxMat",
+            new Color(0.55f, 0.52f, 0.48f), 0.05f, 0.2f);
+        Material shelfMat   = GetOrCreateMat("ShelfMat",
+            new Color(0.50f, 0.45f, 0.38f), 0.1f, 0.25f);
+
+        // ── Left room desks ───────────────────────────────────────────────
+        // Desk 1: near west wall
+        BuildFurniturePiece("Desk_1", new Vector3(-16f, 0.4f, 5f),
+            new Vector3(2.5f, 0.8f, 1.2f), deskMat);
+        // Monitor on desk 1
+        BuildFurniturePiece("Monitor_1", new Vector3(-16f, 1.1f, 5f),
+            new Vector3(0.1f, 0.7f, 0.9f), monitorMat);
+
+        // Desk 2: near south wall
+        BuildFurniturePiece("Desk_2", new Vector3(-10f, 0.4f, -7.5f),
+            new Vector3(2.0f, 0.8f, 1.0f), deskMat);
+        // Monitor on desk 2
+        BuildFurniturePiece("Monitor_2", new Vector3(-10f, 1.1f, -7.5f),
+            new Vector3(0.1f, 0.6f, 0.8f), monitorMat);
+
+        // ── Right room furniture ──────────────────────────────────────────
+        // Desk 3: right side near east wall
+        BuildFurniturePiece("Desk_3", new Vector3(16f, 0.4f, -5f),
+            new Vector3(2.0f, 0.8f, 1.0f), deskMat);
+        BuildFurniturePiece("Monitor_3", new Vector3(16f, 1.1f, -5f),
+            new Vector3(0.1f, 0.65f, 0.85f), monitorMat);
+
+        // ── Scattered boxes ───────────────────────────────────────────────
+        BuildFurniturePiece("Box_1", new Vector3(-15f, 0.3f, -3f),
+            new Vector3(0.6f, 0.6f, 0.6f), boxMat);
+        BuildFurniturePiece("Box_2", new Vector3(-15.5f, 0.3f, -3.5f),
+            new Vector3(0.5f, 0.5f, 0.5f), boxMat);
+        BuildFurniturePiece("Box_3", new Vector3(12f, 0.3f, 6f),
+            new Vector3(0.7f, 0.7f, 0.7f), boxMat);
+        BuildFurniturePiece("Box_4", new Vector3(7f, 0.3f, -7f),
+            new Vector3(0.55f, 0.55f, 0.55f), boxMat);
+
+        // ── Shelf-like ledges on walls ─────────────────────────────────────
+        BuildFurniturePiece("Shelf_W1", new Vector3(-18.5f, 1.2f, 0f),
+            new Vector3(0.4f, 0.1f, 3f), shelfMat);
+        BuildFurniturePiece("Shelf_N1", new Vector3(-2f, 1.2f, 9.1f),
+            new Vector3(3f, 0.1f, 0.4f), shelfMat);
+    }
+
+    static void BuildFurniturePiece(string name, Vector3 pos, Vector3 scale, Material mat)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name                 = name;
+        go.transform.position   = pos;
+        go.transform.localScale = scale;
+        go.isStatic             = true;
+        go.GetComponent<Renderer>().sharedMaterial = mat;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    //  Gameplay objects
+    // ════════════════════════════════════════════════════════════════════════
+
+    static GameObject BuildBlob(string name, Vector3 pos, Color col, GameObject robotPrefab)
     {
         var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         go.name = name;
@@ -163,6 +325,19 @@ public static class SceneBuilder
         ctrl.activeColor   = col;
         ctrl.inactiveColor = new Color(col.r * 0.35f, col.g * 0.35f, col.b * 0.35f);
 
+        // BUG FIX: assign the RobotSphere prefab so blobs get their avatar
+        if (robotPrefab != null)
+        {
+            ctrl.robotSpherePrefab = robotPrefab;
+            ctrl.avatarRoot        = go.transform;
+            ctrl.hideBlobMeshWhenAvatarPresent = true;
+        }
+        else
+        {
+            Debug.LogWarning($"[Blob3D] RobotSphere prefab not found at {RobotSpherePrefabPath}. " +
+                $"Blobs will use fallback sphere mesh. Run Blob3D > Setup > Assign RobotSphere To Blobs after importing the asset.");
+        }
+
         return go;
     }
 
@@ -171,15 +346,15 @@ public static class SceneBuilder
         var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
         go.name                 = "Gate";
         go.transform.position   = pos;
-        go.transform.localScale = new Vector3(0.5f, 3f, 3f);
+        go.transform.localScale = new Vector3(0.5f, 4f, 3f);
 
         var mat = GetOrCreateMat("GateMat",
-            new Color(1f, 0.15f, 0.15f), 0.6f, 0.85f,
-            emissive: true, emCol: new Color(0.4f, 0.05f, 0.05f));
+            GateColor, 0.3f, 0.7f,
+            emissive: true, emCol: GateColor * 0.3f);
         go.GetComponent<Renderer>().sharedMaterial = mat;
 
-        // Gate.cs requires Rigidbody via [RequireComponent] – added automatically
-        go.AddComponent<Gate>();
+        var gate = go.AddComponent<Gate>();
+        gate.openHeight = 4.5f;  // taller walls need higher open
         return go;
     }
 
@@ -212,11 +387,11 @@ public static class SceneBuilder
             GetOrCreateMat(name + "Mat", new Color(0.5f, 0.25f, 0.85f), 0.3f, 0.55f);
 
         var rb = go.AddComponent<Rigidbody>();
-        rb.mass        = 2f;
-        rb.linearDamping        = 7f;
+        rb.mass           = 2f;
+        rb.linearDamping  = 7f;
         rb.angularDamping = 12f;
-        rb.constraints = RigidbodyConstraints.FreezeRotation |
-                         RigidbodyConstraints.FreezePositionY;
+        rb.constraints    = RigidbodyConstraints.FreezeRotation |
+                            RigidbodyConstraints.FreezePositionY;
     }
 
     static void BuildObstacle(string name, Vector3 pos)
@@ -226,7 +401,7 @@ public static class SceneBuilder
         go.transform.position   = pos;
         go.transform.localScale = Vector3.one;
         go.GetComponent<Renderer>().sharedMaterial =
-            GetOrCreateMat("ObstacleMat", new Color(0.22f, 0.12f, 0.38f), 0.2f, 0.4f);
+            GetOrCreateMat("ObstacleMat", new Color(0.35f, 0.28f, 0.45f), 0.2f, 0.4f);
     }
 
     static void BuildMergeZone(Vector3 pos)
@@ -244,32 +419,6 @@ public static class SceneBuilder
         go.AddComponent<MergeZone>();
     }
 
-    static void BuildStarfield()
-    {
-        var go = new GameObject("Starfield");
-        go.transform.position = new Vector3(0f, 50f, 0f);
-
-        var ps   = go.AddComponent<ParticleSystem>();
-        var main = ps.main;
-        main.loop            = true;
-        main.startLifetime   = 200f;
-        main.startSpeed      = 0f;
-        main.startSize       = new ParticleSystem.MinMaxCurve(0.06f, 0.22f);
-        main.startColor      = new ParticleSystem.MinMaxGradient(
-                                   new Color(0.8f, 0.85f, 1f, 0.9f),
-                                   Color.white);
-        main.maxParticles    = 700;
-        main.simulationSpace = ParticleSystemSimulationSpace.World;
-
-        var em = ps.emission;
-        em.rateOverTime = 0;
-        em.SetBursts(new[] { new ParticleSystem.Burst(0f, 700) });
-
-        var shape = ps.shape;
-        shape.shapeType = ParticleSystemShapeType.Box;
-        shape.scale     = new Vector3(100f, 1f, 100f);
-    }
-
     // ════════════════════════════════════════════════════════════════════════
     //  Asset helpers
     // ════════════════════════════════════════════════════════════════════════
@@ -281,8 +430,10 @@ public static class SceneBuilder
         Directory.CreateDirectory("Assets/Materials");
         string path = $"Assets/Materials/{name}.mat";
 
+        // Always recreate so palette changes take effect on rebuild
         var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (existing != null) return existing;
+        if (existing != null)
+            AssetDatabase.DeleteAsset(path);
 
         var mat = new Material(Shader.Find("Standard"));
         mat.color = col;
@@ -313,9 +464,25 @@ public static class SceneBuilder
         tagManager.ApplyModifiedProperties();
     }
 
-    // ── Colour palette ─────────────────────────────────────────────────────
-    static readonly Color WallColor    = new Color(0.10f, 0.10f, 0.24f);
-    static readonly Color DivColor     = new Color(0.18f, 0.08f, 0.32f);
+    // ════════════════════════════════════════════════════════════════════════
+    //  Colour palette — warm interior tones to match reference
+    // ════════════════════════════════════════════════════════════════════════
+
+    // Walls: beige / cream interior
+    static readonly Color WallBeige    = new Color(0.82f, 0.76f, 0.66f);
+    static readonly Color WallGrey     = new Color(0.45f, 0.44f, 0.48f);
+    static readonly Color DivWallColor = new Color(0.60f, 0.55f, 0.50f);
+
+    // Floor: dark grey
+    static readonly Color FloorColor   = new Color(0.12f, 0.12f, 0.15f);
+
+    // Ceiling: off-white
+    static readonly Color CeilingColor = new Color(0.75f, 0.73f, 0.70f);
+
+    // Gate: pink/rose doorway
+    static readonly Color GateColor    = new Color(0.85f, 0.45f, 0.55f);
+
+    // Blobs
     static readonly Color BlobOneColor = new Color(0.15f, 0.85f, 1.00f);   // Cyan
     static readonly Color BlobTwoColor = new Color(1.00f, 0.35f, 0.80f);   // Pink
 }
