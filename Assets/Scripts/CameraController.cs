@@ -13,10 +13,10 @@ public class CameraController : MonoBehaviour
     public Transform blobTwo;
 
     [Header("Individual Blob TPP")]
-    public float tppHeightBase    = 8f;      // Height above blob
-    public float tppDistance      = 6f;      // Distance behind blob
-    public float tppTiltAngle     = 55f;     // View angle
-    public float tppSmoothSpeed   = 5f;
+    public float tppHeightBase      = 8f;      // Height above blob
+    public float tppDistance        = 6f;      // Distance behind blob
+    public float tppLookHeightOffset = 1.1f;   // Look slightly above blob center
+    public float tppSmoothSpeed     = 7f;
 
     [Header("Combined View")]
     public float combinedHeightBase  = 12f;   // Min height above centroid
@@ -26,11 +26,11 @@ public class CameraController : MonoBehaviour
     public float combinedSmoothSpeed = 5f;
 
     [Header("Velocity Prediction")]
-    public float velocityLookaheadScale = 2f;
+    public float velocityLookaheadScale = 0.2f;
+    public float maxLookaheadDistance = 2.5f;
 
     private BlobManager blobManager;
-    private Vector3    cameraVelocity = Vector3.zero;
-    private ControlMode lastMode = ControlMode.Both;
+    private Vector3 cameraVelocity = Vector3.zero;
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -43,19 +43,22 @@ public class CameraController : MonoBehaviour
     {
         if (blobOne == null || blobTwo == null) return;
 
-        // Determine target position based on control mode
+        // Determine target position based on control mode:
+        // - OnlyFirst  => Blob1 individual TPP
+        // - OnlySecond => Blob2 individual TPP
+        // - Both       => Combined framing
         Vector3 targetPos;
         Vector3 lookAtPos;
 
         if (blobManager != null && blobManager.Mode == ControlMode.OnlyFirst)
         {
             // Focus on Blob 1
-            ComputeIndividualBlobView(blobOne, blobTwo, out targetPos, out lookAtPos);
+            ComputeIndividualBlobView(blobOne, out targetPos, out lookAtPos);
         }
         else if (blobManager != null && blobManager.Mode == ControlMode.OnlySecond)
         {
             // Focus on Blob 2
-            ComputeIndividualBlobView(blobTwo, blobOne, out targetPos, out lookAtPos);
+            ComputeIndividualBlobView(blobTwo, out targetPos, out lookAtPos);
         }
         else
         {
@@ -71,29 +74,32 @@ public class CameraController : MonoBehaviour
             ref cameraVelocity,
             1f / smoothness);
 
-        // Look ahead based on velocity
-        Vector3 lookTarget = lookAtPos + cameraVelocity * velocityLookaheadScale;
-        transform.LookAt(lookTarget);
+        // Look ahead based on camera velocity, clamped for stability.
+        Vector3 lookahead = cameraVelocity * velocityLookaheadScale;
+        if (lookahead.sqrMagnitude > maxLookaheadDistance * maxLookaheadDistance)
+            lookahead = lookahead.normalized * maxLookaheadDistance;
 
-        lastMode = blobManager != null ? blobManager.Mode : ControlMode.Both;
+        Vector3 lookTarget = lookAtPos + lookahead;
+        transform.LookAt(lookTarget);
     }
 
     /// <summary>
     /// Individual blob TPP: camera follows one blob, staying behind and above it.
-    /// Takes the other blob into account for context awareness.
     /// </summary>
-    void ComputeIndividualBlobView(Transform primary, Transform secondary, 
+    void ComputeIndividualBlobView(Transform primary,
         out Vector3 camPos, out Vector3 lookPos)
     {
         Vector3 blobWorldPos = primary.position;
-        Vector3 blobFacing = primary.forward;  // Use blob's facing direction
+        Vector3 blobFacing = Vector3.ProjectOnPlane(primary.forward, Vector3.up).normalized;
+        if (blobFacing.sqrMagnitude < 0.0001f)
+            blobFacing = Vector3.forward;
 
         // Camera: behind and above the target blob
         Vector3 behindOffset = -blobFacing * tppDistance;
         camPos = blobWorldPos + behindOffset + Vector3.up * tppHeightBase;
 
-        // Look at the blob, slightly ahead for velocity prediction
-        lookPos = blobWorldPos + Vector3.up * (primary.localScale.y * 0.5f);
+        // Look at the target blob upper body region.
+        lookPos = blobWorldPos + Vector3.up * tppLookHeightOffset;
     }
 
     /// <summary>
