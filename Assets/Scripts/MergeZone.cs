@@ -15,6 +15,8 @@ public class MergeZone : MonoBehaviour
     public float mergeDuration = 1.4f;
     [Tooltip("Max horizontal distance between blob centers to auto-unite.")]
     public float mergeProximityDistance = 1.35f;
+    [Tooltip("Extra multiplier on combined blob radii when auto-calculating merge distance.")]
+    public float mergeRadiusPaddingMultiplier = 1.05f;
     [Tooltip("Horizontal distance from this transform’s center for the final zone. 0 = localScale.x × 0.5.")]
     public float finalZoneRadius = 0f;
     [Tooltip("After split, blob centers must exceed mergeProximity × this before another unite.")]
@@ -109,14 +111,15 @@ public class MergeZone : MonoBehaviour
         if (!blobOne.gameObject.activeSelf || !blobTwo.gameObject.activeSelf) return;
 
         float dist = FlatDist(blobOne.transform.position, blobTwo.transform.position);
+        float requiredMergeDistance = CurrentMergeDistance();
         if (!autoMergeArmed)
         {
-            if (dist > mergeProximityDistance * separationHysteresis)
+            if (dist > requiredMergeDistance * separationHysteresis)
                 autoMergeArmed = true;
             return;
         }
 
-        if (dist > mergeProximityDistance) return;
+        if (dist > requiredMergeDistance) return;
 
         bool completeLevel = BothBlobsInFinalZone();
         StartCoroutine(DoMerge(completeLevel));
@@ -133,6 +136,35 @@ public class MergeZone : MonoBehaviour
         a.y = 0f;
         b.y = 0f;
         return Vector3.Distance(a, b);
+    }
+
+    float BlobWorldRadiusXZ(BlobController blob)
+    {
+        if (blob == null) return 0f;
+
+        var sc = blob.GetComponent<SphereCollider>();
+        if (sc != null)
+        {
+            float m = Mathf.Max(
+                Mathf.Abs(blob.transform.lossyScale.x),
+                Mathf.Abs(blob.transform.lossyScale.y),
+                Mathf.Abs(blob.transform.lossyScale.z));
+            return sc.radius * m;
+        }
+
+        var c = blob.GetComponent<Collider>();
+        if (c != null)
+            return Mathf.Max(c.bounds.extents.x, c.bounds.extents.z);
+
+        return 0f;
+    }
+
+    float CurrentMergeDistance()
+    {
+        float r1 = BlobWorldRadiusXZ(blobOne);
+        float r2 = BlobWorldRadiusXZ(blobTwo);
+        float bySize = (r1 + r2) * Mathf.Max(1f, mergeRadiusPaddingMultiplier);
+        return Mathf.Max(mergeProximityDistance, bySize);
     }
 
     IEnumerator DoMerge(bool triggerLevelComplete)
@@ -198,14 +230,38 @@ public class MergeZone : MonoBehaviour
 
         GameManager.Instance?.CancelPendingReloadAndWin();
 
-        blobTwo.gameObject.SetActive(true);
-        blobOne.transform.position   = savedPos1;
-        blobTwo.transform.position   = savedPos2;
+        // Calculate the offset between the original blob positions before merge
+        Vector3 originalOffset = savedPos2 - savedPos1;
+
+        // Current merged blob position
+        Vector3 currentMergedPos = blobOne.transform.position;
+
+        // Split both blobs based on current position and original offset
+        Vector3 splitPos1 = currentMergedPos - originalOffset * 0.5f;
+        Vector3 splitPos2 = currentMergedPos + originalOffset * 0.5f;
+
+        // Set rigidbody states and positions BEFORE activating blob2
+        var rb1 = blobOne.GetComponent<Rigidbody>();
+        var rb2 = blobTwo.GetComponent<Rigidbody>();
+        
+        // Set blob2 kinematic temporarily while repositioning
+        if (rb2 != null)
+        {
+            rb2.linearVelocity = Vector3.zero;
+            rb2.angularVelocity = Vector3.zero;
+            rb2.isKinematic = true;
+        }
+        
+        // Set positions and scales BEFORE activation
+        blobOne.transform.position   = splitPos1;
+        blobTwo.transform.position   = splitPos2;
         blobOne.transform.localScale = savedScale1;
         blobTwo.transform.localScale = savedScale2;
 
-        var rb1 = blobOne.GetComponent<Rigidbody>();
-        var rb2 = blobTwo.GetComponent<Rigidbody>();
+        // Now activate blob2 (after positions are set)
+        blobTwo.gameObject.SetActive(true);
+
+        // Restore rigidbody to normal state
         if (rb1 != null)
         {
             rb1.linearVelocity = Vector3.zero;
@@ -213,8 +269,7 @@ public class MergeZone : MonoBehaviour
         }
         if (rb2 != null)
         {
-            rb2.linearVelocity = Vector3.zero;
-            rb2.angularVelocity = Vector3.zero;
+            rb2.isKinematic = false;
         }
 
         blobOne.RefreshMovementBaseline();
