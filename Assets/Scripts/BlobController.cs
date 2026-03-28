@@ -17,13 +17,17 @@ public class BlobController : MonoBehaviour
     [Tooltip("If true, initialize facing so the avatar points toward the gate at scene start.")]
     public bool faceGateOnStart = true;
 
-    [Header("Jump")]
-    public float jumpForce       = 8f;
+    [Header("Jump / Damping")]
+    public float jumpForce       = 6f;
     public float groundCheckDist = 0.52f;  // slightly > sphere radius (0.425)
     [Tooltip("Extra distance for landing detection to avoid missing ground right after jump.")]
     public float groundCheckPadding = 0.08f;
     [Tooltip("How quickly jump squash returns to normal scale after landing.")]
     public float jumpScaleRecoverSpeed = 16f;
+    [Tooltip("Rigidbody linear damping while grounded (snappy stops).")]
+    public float groundDamping = 5f;
+    [Tooltip("Rigidbody linear damping while airborne (smooth arcs).")]
+    public float airDamping    = 0.3f;
 
     [Header("Visuals")]
     public Color activeColor   = Color.cyan;
@@ -129,7 +133,7 @@ public class BlobController : MonoBehaviour
         foreach (var rfa in GetComponentsInChildren<RobotFreeAnim>(true))
             rfa.disableInput = true;
 
-        rb.linearDamping  = 5f;
+        rb.linearDamping  = groundDamping;
         rb.angularDamping = 5f;
         rb.useGravity     = true;
         rb.interpolation  = RigidbodyInterpolation.Interpolate;
@@ -153,6 +157,9 @@ public class BlobController : MonoBehaviour
         float recoverSpeed = isGrounded ? jumpScaleRecoverSpeed : jumpScaleRecoverSpeed * 0.35f;
         transform.localScale = Vector3.Lerp(
             transform.localScale, baseScale, Time.fixedDeltaTime * recoverSpeed);
+
+        // Smooth platforming: low drag in air preserves horizontal momentum
+        rb.linearDamping = isGrounded ? groundDamping : airDamping;
 
         if (hasJumpAnim && isGrounded)
             avatarAnim.SetBool(jumpAnimParam, false);

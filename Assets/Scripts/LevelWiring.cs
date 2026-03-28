@@ -1,11 +1,9 @@
 using UnityEngine;
 
 /// <summary>
-/// Wires scene-level connections at runtime. Supports cross-wired dual gates:
-///   PressureButton_1 → Gate_2  (blob1 opens the path for blob2)
-///   PressureButton_2 → Gate_1  (blob2 opens the path for blob1)
+/// Wires scene-level connections at runtime.
+/// Direct wiring: PressureButton_1 → Gate_1, PressureButton_2 → Gate_2.
 /// Falls back to single button → single gate when only one of each exists.
-/// Add this to the Managers GameObject.
 /// </summary>
 public class LevelWiring : MonoBehaviour
 {
@@ -26,18 +24,17 @@ public class LevelWiring : MonoBehaviour
             return;
         }
 
-        // Dual cross-wired: Button_1 → Gate_2, Button_2 → Gate_1
-        PressureButton btn1 = FindByName<PressureButton>(buttons, "PressureButton_1");
-        PressureButton btn2 = FindByName<PressureButton>(buttons, "PressureButton_2");
-        Gate gate1 = FindByName<Gate>(gates, "Gate_1");
-        Gate gate2 = FindByName<Gate>(gates, "Gate_2");
-
+        // Direct wiring: Button_N → Gate_N
         int wired = 0;
-        if (btn1 != null && gate2 != null) { Wire(btn1, gate2); wired++; }
-        if (btn2 != null && gate1 != null) { Wire(btn2, gate1); wired++; }
+        for (int n = 1; n <= Mathf.Max(buttons.Length, gates.Length); n++)
+        {
+            var btn  = FindByName<PressureButton>(buttons, $"PressureButton_{n}");
+            var gate = FindByName<Gate>(gates, $"Gate_{n}");
+            if (btn != null && gate != null) { Wire(btn, gate); wired++; }
+        }
 
         if (wired > 0)
-            Debug.Log($"[Blob3D] LevelWiring: {wired} cross-wired Button → Gate pair(s) connected.");
+            Debug.Log($"[Blob3D] LevelWiring: {wired} Button → Gate pair(s) connected.");
         else
             Debug.LogWarning("[Blob3D] LevelWiring: Could not find named Button/Gate pairs to wire!");
     }

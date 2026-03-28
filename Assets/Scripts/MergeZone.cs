@@ -19,12 +19,8 @@ public class MergeZone : MonoBehaviour
     public float mergeProximityDistance = 1.35f;
     [Tooltip("Extra multiplier on combined blob radii when auto-calculating merge distance.")]
     public float mergeRadiusPaddingMultiplier = 1.05f;
-    [Tooltip("Horizontal distance from this transform’s center for the final zone. 0 = localScale.x × 0.5.")]
-    public float finalZoneRadius = 0f;
     [Tooltip("After split, blob centers must exceed mergeProximity × this before another unite.")]
     public float separationHysteresis = 1.45f;
-    [Tooltip("Extra meters added to the yellow pad’s detected radius (renderer bounds) for win checks.")]
-    public float winZonePadding = 0.35f;
 
     private BlobController blobOne;
     private BlobController blobTwo;
@@ -35,15 +31,9 @@ public class MergeZone : MonoBehaviour
 
     private Vector3 savedPos1, savedPos2, savedScale1, savedScale2;
 
-    private Renderer              rend;
-    private MaterialPropertyBlock mpb;
-    private static readonly Color kBaseEmit = new Color(1f, 1f, 0f) * 0.6f;
-
     void Awake()
     {
         Instance = this;
-        rend = GetComponent<Renderer>();
-        mpb  = new MaterialPropertyBlock();
     }
 
     void OnDestroy()
@@ -87,51 +77,9 @@ public class MergeZone : MonoBehaviour
         autoMergeArmed = false;
     }
 
-    float FinalZoneRadiusWorld()
-    {
-        return finalZoneRadius > 0.01f ? finalZoneRadius : transform.localScale.x * 0.5f;
-    }
-
-    /// <summary>XZ win area from the yellow mesh’s world bounds (matches what you see), not only transform math.</summary>
-    void GetWinZoneXZ(out Vector2 centerXZ, out float radiusXZ)
-    {
-        if (rend != null)
-        {
-            Bounds b = rend.bounds;
-            centerXZ = new Vector2(b.center.x, b.center.z);
-            radiusXZ = Mathf.Max(b.extents.x, b.extents.z) + winZonePadding;
-        }
-        else
-        {
-            Vector3 p = transform.position;
-            centerXZ = new Vector2(p.x, p.z);
-            radiusXZ = FinalZoneRadiusWorld() + winZonePadding;
-        }
-    }
-
-    bool BlobCenterInWinZoneXZ(Vector3 worldPos)
-    {
-        GetWinZoneXZ(out Vector2 c, out float r);
-        Vector2 p = new Vector2(worldPos.x, worldPos.z);
-        return Vector2.Distance(p, c) <= r;
-    }
 
     void Update()
     {
-        if (rend != null)
-        {
-            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 3f);
-            mpb.SetColor("_EmissionColor", kBaseEmit * pulse);
-            rend.SetPropertyBlock(mpb);
-        }
-
-        // Win: merged blob’s center enters the yellow pad (uses renderer bounds so it matches the mesh).
-        if (blobOne != null && blobsMerged && !merging && blobOne.gameObject.activeSelf)
-        {
-            if (BlobCenterInWinZoneXZ(blobOne.transform.position))
-                GameManager.Instance?.OnLevelComplete();
-        }
-
         if (merging || blobOne == null || blobTwo == null) return;
         if (!blobOne.gameObject.activeSelf || !blobTwo.gameObject.activeSelf) return;
 
@@ -146,14 +94,7 @@ public class MergeZone : MonoBehaviour
 
         if (dist > requiredMergeDistance) return;
 
-        bool completeLevel = BothBlobsInFinalZone();
-        StartCoroutine(DoMerge(completeLevel));
-    }
-
-    bool BothBlobsInFinalZone()
-    {
-        return BlobCenterInWinZoneXZ(blobOne.transform.position)
-            && BlobCenterInWinZoneXZ(blobTwo.transform.position);
+        StartCoroutine(DoMerge());
     }
 
     static float FlatDist(Vector3 a, Vector3 b)
@@ -192,7 +133,7 @@ public class MergeZone : MonoBehaviour
         return Mathf.Max(mergeProximityDistance, bySize);
     }
 
-    IEnumerator DoMerge(bool triggerLevelComplete)
+    IEnumerator DoMerge()
     {
         merging = true;
 
@@ -243,9 +184,6 @@ public class MergeZone : MonoBehaviour
 
         merging     = false;
         blobsMerged = true;
-
-        if (triggerLevelComplete)
-            GameManager.Instance?.OnLevelComplete();
     }
 
     /// <summary><b>X</b> — split blobs; auto-unite stays off until they move apart.</summary>
