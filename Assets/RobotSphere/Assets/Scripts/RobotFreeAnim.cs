@@ -1,8 +1,11 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class RobotFreeAnim : MonoBehaviour {
+
+	/// <summary>When true (e.g. robot used as Blob3D avatar), input is ignored so BlobManager / BlobController own movement and Space = jump.</summary>
+	public bool disableInput = false;
 
 	Vector3 rot = Vector3.zero;
 	float rotSpeed = 40f;
@@ -19,11 +22,16 @@ public class RobotFreeAnim : MonoBehaviour {
 	void Update()
 	{
 		CheckKey();
-		gameObject.transform.eulerAngles = rot;
+		// When used as a blob avatar, BlobController drives rotation — do not snap to rot (it stays 0).
+		if (!disableInput)
+			gameObject.transform.eulerAngles = rot;
 	}
 
 	void CheckKey()
 	{
+		if (disableInput)
+			return;
+
 		// Walk
 		if (Input.GetKey(KeyCode.W))
 		{
