@@ -63,8 +63,8 @@ public class GameManager : MonoBehaviour
         };
 
         string mode = BlobManager.Instance.GetModeLabel();
-        GUI.Box(new Rect(12f, 12f, 420f, 64f),
-            $"Control: {mode}\n<size=12>[TAB] · [WASD] move/turn · [SPACE] jump · close = unite · [X] split (move apart before re-unite) · win on pad (2 blobs or merged)</size>", boxStyle);
+        GUI.Box(new Rect(12f, 12f, 460f, 64f),
+            $"Control: {mode}\n<size=12>[X] split/divide · [TAB] switch · [WASD] move · [SPACE] jump · approach to unite · reach pad to win</size>", boxStyle);
     }
 
     void DrawWinScreen()

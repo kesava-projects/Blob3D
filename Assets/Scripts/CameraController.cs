@@ -29,6 +29,12 @@ public class CameraController : MonoBehaviour
     public float velocityLookaheadScale = 0.2f;
     public float maxLookaheadDistance = 2.5f;
 
+    [Header("Room Bounds Clamping")]
+    [Tooltip("Enable to prevent camera from leaving the room.")]
+    public bool clampToRoom = false;
+    public Vector3 roomMin = new Vector3(-28f, 0.5f, -38f);
+    public Vector3 roomMax = new Vector3(8f, 5.5f, -2f);
+
     private BlobManager blobManager;
     private Vector3 cameraVelocity = Vector3.zero;
 
@@ -68,11 +74,21 @@ public class CameraController : MonoBehaviour
 
         // Apply SmoothDamp with velocity prediction
         float smoothness = GetCurrentSmoothSpeed();
-        transform.position = Vector3.SmoothDamp(
+        Vector3 smoothed = Vector3.SmoothDamp(
             transform.position,
             targetPos,
             ref cameraVelocity,
             1f / smoothness);
+
+        // Clamp to room bounds so camera never escapes the environment
+        if (clampToRoom)
+        {
+            smoothed.x = Mathf.Clamp(smoothed.x, roomMin.x, roomMax.x);
+            smoothed.y = Mathf.Clamp(smoothed.y, roomMin.y, roomMax.y);
+            smoothed.z = Mathf.Clamp(smoothed.z, roomMin.z, roomMax.z);
+        }
+
+        transform.position = smoothed;
 
         // Look ahead based on camera velocity, clamped for stability.
         Vector3 lookahead = cameraVelocity * velocityLookaheadScale;

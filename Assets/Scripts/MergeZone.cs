@@ -12,6 +12,8 @@ public class MergeZone : MonoBehaviour
     public static MergeZone Instance { get; private set; }
 
     [Header("Settings")]
+    [Tooltip("If true, the game starts with a single merged blob. Press X to split.")]
+    public bool startMerged = false;
     public float mergeDuration = 1.4f;
     [Tooltip("Max horizontal distance between blob centers to auto-unite.")]
     public float mergeProximityDistance = 1.35f;
@@ -60,6 +62,29 @@ public class MergeZone : MonoBehaviour
             blobOne = bm.blobOne;
             blobTwo = bm.blobTwo;
         }
+
+        if (startMerged && blobOne != null && blobTwo != null)
+            InitMergedState();
+    }
+
+    /// <summary>Begin the level with a single merged blob. Player presses X to split.</summary>
+    void InitMergedState()
+    {
+        savedScale1 = blobOne.transform.localScale;
+        savedScale2 = blobTwo.transform.localScale;
+
+        // Save positions with an offset so TrySplit produces a clean side-by-side split
+        Vector3 pos = blobOne.transform.position;
+        savedPos1 = pos + Vector3.left  * 1.2f;
+        savedPos2 = pos + Vector3.right * 1.2f;
+
+        // Hide blob 2, scale blob 1 up
+        blobTwo.gameObject.SetActive(false);
+        blobOne.transform.localScale = savedScale1 * 1.5f;
+        blobOne.RefreshMovementBaseline();
+
+        blobsMerged    = true;
+        autoMergeArmed = false;
     }
 
     float FinalZoneRadiusWorld()
