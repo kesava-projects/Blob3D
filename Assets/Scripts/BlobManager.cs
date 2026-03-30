@@ -46,8 +46,8 @@ public class BlobManager : MonoBehaviour
         // Jump (RobotFreeAnim Space/roll is disabled on blob avatars)
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            if (blobOne != null && blobOne.IsControlled) blobOne.Jump();
-            if (blobTwo != null && blobTwo.IsControlled) blobTwo.Jump();
+            if (BlobActive(blobOne) && blobOne.IsControlled) blobOne.Jump();
+            if (BlobActive(blobTwo) && blobTwo.IsControlled) blobTwo.Jump();
         }
 
         // Normalised so diagonal movement isn't faster
@@ -55,8 +55,8 @@ public class BlobManager : MonoBehaviour
             Input.GetAxisRaw("Horizontal"),
             Input.GetAxisRaw("Vertical")).normalized;
 
-        if (blobOne != null && blobOne.IsControlled) blobOne.Move(input);
-        if (blobTwo != null && blobTwo.IsControlled) blobTwo.Move(input);
+        if (BlobActive(blobOne) && blobOne.IsControlled) blobOne.Move(input);
+        if (BlobActive(blobTwo) && blobTwo.IsControlled) blobTwo.Move(input);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
@@ -69,11 +69,22 @@ public class BlobManager : MonoBehaviour
 
     public void ReapplyControlMode() => ApplyMode();
 
-    public string GetModeLabel() => Mode switch
+    public string GetModeLabel()
     {
-        ControlMode.Both       => "[ BOTH ]",
-        ControlMode.OnlyFirst  => "[ BLOB 1 ]",
-        ControlMode.OnlySecond => "[ BLOB 2 ]",
-        _                      => "[ ? ]"
-    };
+        // When merged (single blob), show MERGED regardless of control mode
+        var mz = MergeZone.Instance;
+        if (mz != null && mz.IsMerged)
+            return "[ MERGED ] press X to split";
+
+        return Mode switch
+        {
+            ControlMode.Both       => "[ BOTH ]",
+            ControlMode.OnlyFirst  => "[ BLOB 1 ]",
+            ControlMode.OnlySecond => "[ BLOB 2 ]",
+            _                      => "[ ? ]"
+        };
+    }
+
+    static bool BlobActive(BlobController b) =>
+        b != null && b.gameObject.activeSelf;
 }

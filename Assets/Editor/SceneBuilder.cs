@@ -4,318 +4,285 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 
 /// <summary>
-/// Editor-only tool.
-/// Menu: Blob3D ▶ Build Level 01  (shortcut: Ctrl/Cmd+Shift+B)
+/// Blob3D ▶ Build Level 01 (Ctrl/Cmd+Shift+B)
 ///
-/// Procedurally creates the full Level01 scene:
+/// Free_RoomA × 2.  Room x∈[-30,10] z∈[-40,0]  upper y≈0  lower y≈-2  ceiling y≈6.
 ///
-///   LEFT ZONE (x < 0)         │  RIGHT ZONE (x > 0)
-///   ─────────────────────────────────────────────────
-///   [B1][B2]  [PushCube]  [BTN]  ║[GATE]║  [obstacles]  [MERGE ZONE]
-///                                 ║      ║
-///   Dividing wall with gate in   ─╝      ╚─  the gap.
-///
-/// Puzzle: Push the purple cube onto the red button → gate rises →
-///         guide both blobs to the merge zone → level complete.
+/// ENTRANCE → split → narrow gap + Gate 1 → push block onto Button 1 → Gate 1 opens
+/// → climb shaft (merged can't fit) → Button 2 → Gate 2 opens
+/// → one walks through, climber jumps down → EXIT DOOR = WIN
 /// </summary>
 public static class SceneBuilder
 {
+    const string RoomPrefab  = "Assets/Free LowPoly SciFi Pack/Prefabs/Rooms/Free_RoomA.prefab";
+    const string RobotPrefab = "Assets/RobotSphere/Assets/Prefab/robotSphere.prefab";
+    const string MatDir      = "Assets/Free LowPoly SciFi Pack/Meshes/Materials/";
+
     [MenuItem("Blob3D/Build Level 01 %#b")]
     public static void BuildLevel()
     {
-        // 1. Ensure custom tags exist in TagManager
         EnsureTag("Blob");
         EnsureTag("Pushable");
 
-        // 2. Fresh empty scene
-        var scene = EditorSceneManager.NewScene(
-            NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        RenderSettings.ambientMode  = UnityEngine.Rendering.AmbientMode.Flat;
+        RenderSettings.ambientLight = new Color(0.33f, 0.26f, 0.37f);
+        RenderSettings.fog = false;
 
-        // 3. Render settings – deep space look
-        RenderSettings.ambientLight = new Color(0.04f, 0.04f, 0.14f);
-        RenderSettings.fog          = false;
+        // ── Assets ──────────────────────────────────────────────────────────
+        var roomPfb   = AssetDatabase.LoadAssetAtPath<GameObject>(RoomPrefab);
+        var robotPfb  = AssetDatabase.LoadAssetAtPath<GameObject>(RobotPrefab);
+        var dkGrey    = AssetDatabase.LoadAssetAtPath<Material>(MatDir + "DARK_GREY_mat.mat");
+        var bluGlow   = AssetDatabase.LoadAssetAtPath<Material>(MatDir + "BLUE_LIGHT_mat.mat");
+        var grey      = AssetDatabase.LoadAssetAtPath<Material>(MatDir + "GREY_mat.mat");
+        if (roomPfb == null) { Debug.LogError("[Blob3D] Free_RoomA not found!"); return; }
 
-        // ── Lighting ──────────────────────────────────────────────────────
+        // ── Room 2× ─────────────────────────────────────────────────────────
+        var room = (GameObject)PrefabUtility.InstantiatePrefab(roomPfb);
+        room.transform.position   = Vector3.zero;
+        room.transform.localScale = Vector3.one * 2f;
+
+        // ── Light ───────────────────────────────────────────────────────────
         var sunGO = new GameObject("Sun");
-        var sun   = sunGO.AddComponent<Light>();
-        sun.type      = LightType.Directional;
-        sun.color     = new Color(0.75f, 0.82f, 1f);
-        sun.intensity = 0.85f;
-        sunGO.transform.rotation = Quaternion.Euler(45f, -40f, 0f);
+        var sun = sunGO.AddComponent<Light>();
+        sun.type = LightType.Directional;
+        sun.color = new Color(1f, 0.99f, 0.93f);
+        sun.intensity = 0.35f;
+        sunGO.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
-        // ── Floor ─────────────────────────────────────────────────────────
-        BuildFloor();
+        // ════════════════════════════════════════════════════════════════════
+        //  ZONE A – Spawn (near entrance gate at z≈0)
+        // ════════════════════════════════════════════════════════════════════
+        Vector3 spawn = new Vector3(-18f, 0.5f, -4f);
 
-        // ── Outer boundary walls ──────────────────────────────────────────
-        // North / South walls span the full width including the dividing wall
-        BuildWall("Wall_N", new Vector3( 0f, 1f,  9.5f), new Vector3(38f, 2f, 1f), WallColor);
-        BuildWall("Wall_S", new Vector3( 0f, 1f, -9.5f), new Vector3(38f, 2f, 1f), WallColor);
-        BuildWall("Wall_W", new Vector3(-19f, 1f, 0f),   new Vector3(1f, 2f, 20f), WallColor);
-        BuildWall("Wall_E", new Vector3( 19f, 1f, 0f),   new Vector3(1f, 2f, 20f), WallColor);
+        // ════════════════════════════════════════════════════════════════
+        //  ZONE B – Gate 1 + Narrow gap (z = -12)
+        //  Corridor-sized gate (not room-spanning).
+        //  Gate_1:   x ∈ [-16, -8]  (8 units, blocks main corridor)
+        //  GapCap:   x ∈ [-7,  -4]  (3 units, cap beside gap)
+        //  Gap:      x ∈ [-8,  -7]  = 1.0 unit
+        //  Split blob ø0.85 fits.  Merged blob ø1.275 doesn’t.
+        // ════════════════════════════════════════════════════════════════
+        // Gate material: red emissive closed, cyan when open
+        var gateMat = Mat("GateMat", new Color(0.15f, 0.02f, 0.02f), 0.6f, 0.7f,
+            true, new Color(0.6f, 0.08f, 0.08f));
 
-        // ── Dividing wall (forces blobs to use the gate) ──────────────────
-        // Gate opening occupies z = -1.5 … +1.5  (gate scale Z = 3)
-        // Wall sections fill the rest of the dividing line at x = 0
-        BuildWall("DivWall_N", new Vector3(0f, 1f,  5.5f), new Vector3(1.2f, 2f, 8f), DivColor);
-        BuildWall("DivWall_S", new Vector3(0f, 1f, -5.5f), new Vector3(1.2f, 2f, 8f), DivColor);
+        Box("Gate_1",  V(-12f, 1.5f, -12f), V(8f, 4f, 0.4f), gateMat, gate: true, gOpen: 4.5f);
+        Box("GapCap",  V(-5.5f, 1.5f, -12f), V(3f, 4f, 0.4f), dkGrey);
 
-        // ── Gate ──────────────────────────────────────────────────────────
-        // Sits in the dividing-wall gap.  openHeight lifts it clear of blobs.
-        var gateGO = BuildGate(new Vector3(0f, 1.5f, 0f));
+        // ════════════════════════════════════════════════════════════════════
+        //  ZONE C – Block + Button 1 (behind Gate 1, z ≈ -16)
+        // ════════════════════════════════════════════════════════════════════
+        BuildButton("PressureButton_1", V(-10f, 0.1f, -16f), grey, bluGlow);
+        BuildPushable("PushCube", V(-18f, 0.5f, -16f), dkGrey);
 
-        // ── Pressure button ───────────────────────────────────────────────
-        // Positioned left of the gate; player pushes the cube here.
-        var btnGO = BuildButton(new Vector3(-4f, 0.06f, -6f));
+        // ════════════════════════════════════════════════════════════════
+        //  ZONE D – Climb steps + Button 2 (z ≈ -22)
+        //  Open staircase (no shaft walls) with 0.5-unit height steps.
+        //  Merged blob is too big to fit on the narrow steps.
+        // ════════════════════════════════════════════════════════════════
+        float sx = -8f, sz = -22f;
 
-        // Button → Gate is wired at runtime by LevelWiring (avoids batch-mode
-        // serialisation issues with UnityEventTools in headless mode).
+        // Steps: 0.5 m height each, staircase going up
+        Box("Step_1", V(sx, 0.25f, sz),       V(1.2f, 0.5f, 1.5f), grey);
+        Box("Step_2", V(sx, 0.75f, sz - 0.3f), V(1.2f, 0.5f, 1.5f), grey);
+        Box("Step_3", V(sx, 1.25f, sz - 0.6f), V(1.2f, 0.5f, 1.5f), grey);
+        Box("Step_4", V(sx, 1.75f, sz - 0.9f), V(1.2f, 0.5f, 1.5f), grey);
 
-        // ── Pushable cube ─────────────────────────────────────────────────
-        // Purple cube the player rolls onto the button.
-        BuildPushable("PushCube", new Vector3(-9f, 0.45f, -5.5f));
+        // Top platform + Button 2
+        Box("ShaftTop", V(sx, 2.25f, sz - 0.6f), V(2.5f, 0.5f, 3f), dkGrey);
+        BuildButton("PressureButton_2", V(sx, 2.56f, sz - 0.6f), grey, bluGlow);
 
-        // ── Static obstacle cubes (right zone, add some challenge) ────────
-        BuildObstacle("Obs_1", new Vector3( 5f, 0.5f,  4f));
-        BuildObstacle("Obs_2", new Vector3( 5f, 0.5f, -4f));
-        BuildObstacle("Obs_3", new Vector3( 9f, 0.5f,  2.5f));
-        BuildObstacle("Obs_4", new Vector3(10f, 0.5f, -2.5f));
-        BuildObstacle("Obs_5", new Vector3(14f, 0.5f,  3.5f));
+        // ════════════════════════════════════════════════════════════════
+        //  ZONE E – Gate 2 (z = -26, corridor-sized, leads to lower level)
+        // ════════════════════════════════════════════════════════════════
+        Box("Gate_2", V(-10f, 0.5f, -26f), V(10f, 4f, 0.4f), gateMat, gate: true, gOpen: 4.5f);
 
-        // ── Blobs ─────────────────────────────────────────────────────────
-        var b1GO = BuildBlob("BlobOne", new Vector3(-14f, 0.425f,  1.2f), BlobOneColor);
-        var b2GO = BuildBlob("BlobTwo", new Vector3(-14f, 0.425f, -1.2f), BlobTwoColor);
+        // Descent steps from shaft top (y≈2.5) to lower floor (y≈-2)
+        // 0.7 m drops — easy to land on.
+        Box("Desc_1", V(sx, 1.55f, -27.5f), V(2f, 0.4f, 2f), grey);
+        Box("Desc_2", V(sx, 0.85f, -29f),   V(2f, 0.4f, 2f), grey);
+        Box("Desc_3", V(sx, 0.15f, -30.5f), V(2f, 0.4f, 2f), grey);
+        Box("Desc_4", V(sx, -0.55f,-32f),   V(2f, 0.4f, 2f), grey);
+        Box("Desc_5", V(sx, -1.25f,-33.5f), V(2f, 0.4f, 2f), grey);
 
-        // ── Merge zone ────────────────────────────────────────────────────
-        BuildMergeZone(new Vector3(15f, 0.06f, 0f));
+        // ════════════════════════════════════════════════════════════════
+        //  ZONE F – Exit trigger at the back wall (z≈-40).
+        //  Covers full back-wall width so walking through ANY back door
+        //  into outer space triggers the win.
+        // ════════════════════════════════════════════════════════════════
+        var exitGO = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        exitGO.name = "ExitZone";
+        exitGO.transform.position   = new Vector3(-10f, -1f, -41f);
+        exitGO.transform.localScale = new Vector3(42f, 6f, 2f);
+        exitGO.GetComponent<Collider>().isTrigger = true;
+        exitGO.GetComponent<Renderer>().enabled = false; // invisible
+        exitGO.AddComponent<ExitZone>();
 
-        // ── Managers GameObject ───────────────────────────────────────────
-        var managers = new GameObject("Managers");
-        managers.AddComponent<GameManager>();
-        managers.AddComponent<LevelWiring>();
-        var bm  = managers.AddComponent<BlobManager>();
-        bm.blobOne = b1GO.GetComponent<BlobController>();
-        bm.blobTwo = b2GO.GetComponent<BlobController>();
+        // ════════════════════════════════════════════════════════════════════
+        //  Blobs (both at spawn; blob2 hidden by startMerged)
+        // ════════════════════════════════════════════════════════════════════
+        var b1 = BuildBlob("BlobOne", spawn, new Color(0.15f, 0.85f, 1f), robotPfb);
+        var b2 = BuildBlob("BlobTwo", spawn, new Color(1f, 0.35f, 0.8f), robotPfb);
 
-        // ── Camera ────────────────────────────────────────────────────────
+        // ════════════════════════════════════════════════════════════════════
+        //  Managers (MergeZone lives here — no yellow pad, just merge logic)
+        // ════════════════════════════════════════════════════════════════════
+        var mgr = new GameObject("Managers");
+        mgr.AddComponent<GameManager>();
+        mgr.AddComponent<LevelWiring>();
+        mgr.AddComponent<BlobPhysicsTuner>();
+
+        var mz = mgr.AddComponent<MergeZone>();
+        mz.startMerged = true;
+
+        var bm = mgr.AddComponent<BlobManager>();
+        bm.blobOne = b1.GetComponent<BlobController>();
+        bm.blobTwo = b2.GetComponent<BlobController>();
+
+        // ════════════════════════════════════════════════════════════════════
+        //  Camera
+        // ════════════════════════════════════════════════════════════════════
         var camGO = new GameObject("Main Camera");
         camGO.tag = "MainCamera";
         var cam = camGO.AddComponent<Camera>();
         camGO.AddComponent<AudioListener>();
-        cam.backgroundColor = new Color(0.01f, 0.01f, 0.10f);
-        cam.clearFlags      = CameraClearFlags.SolidColor;
-        cam.farClipPlane    = 250f;
+        cam.backgroundColor = new Color(0.05f, 0.04f, 0.08f);
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.farClipPlane = 200f;
 
-        var cc  = camGO.AddComponent<CameraController>();
-        cc.blobOne = b1GO.transform;
-        cc.blobTwo = b2GO.transform;
-        camGO.transform.position = new Vector3(0f, 14f, -10f);
-        camGO.transform.LookAt(Vector3.zero);
+        var cc = camGO.AddComponent<CameraController>();
+        cc.blobOne = b1.transform;
+        cc.blobTwo = b2.transform;
+        cc.tppHeightBase       = 3.5f;
+        cc.tppDistance          = 6f;
+        cc.tppLookHeightOffset = 0.8f;
+        cc.tppSmoothSpeed      = 7f;
+        cc.combinedHeightBase  = 4f;
+        cc.combinedMaxHeight   = 5f;
+        cc.combinedZOffset     = -8f;
+        cc.velocityLookaheadScale = 0.2f;
+        cc.maxLookaheadDistance   = 3f;
+        cc.clampToRoom = true;
+        cc.roomMin = new Vector3(-28f, -1.5f, -38f);
+        cc.roomMax = new Vector3(8f, 5.5f, -2f);
+        camGO.transform.position = new Vector3(-15f, 3f, -6f);
+        camGO.transform.LookAt(new Vector3(-10f, 0f, -15f));
 
-        // ── Starfield ─────────────────────────────────────────────────────
-        BuildStarfield();
-
-        // ── Save ──────────────────────────────────────────────────────────
+        // ════════════════════════════════════════════════════════════════════
+        //  Save
+        // ════════════════════════════════════════════════════════════════════
         Directory.CreateDirectory("Assets/Scenes");
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/Level01.unity");
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-
-        Debug.Log("[Blob3D] ✓ Level01.unity built and saved.");
+        Debug.Log("[Blob3D] ✓ Level01 built: no wall gaps, easy steps, exit door win.");
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    //  Builder helpers
+    //  Helpers
     // ════════════════════════════════════════════════════════════════════════
 
-    static void BuildFloor()
-    {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        go.name = "Floor";
-        go.transform.position   = new Vector3(0f, -0.5f, 0f);
-        go.transform.localScale = new Vector3(38f, 1f, 20f);
-        go.GetComponent<Renderer>().sharedMaterial =
-            GetOrCreateMat("FloorMat", new Color(0.07f, 0.07f, 0.18f), 0.5f, 0.65f);
-    }
+    static Vector3 V(float x, float y, float z) => new Vector3(x, y, z);
 
-    static void BuildWall(string name, Vector3 pos, Vector3 scale, Color col)
+    static GameObject Box(string name, Vector3 pos, Vector3 scale, Material mat,
+        bool gate = false, float gOpen = 4f)
     {
         var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        go.name                 = name;
+        go.name = name;
         go.transform.position   = pos;
         go.transform.localScale = scale;
-        go.GetComponent<Renderer>().sharedMaterial =
-            GetOrCreateMat(name + "Mat", col, 0.25f, 0.35f);
+        if (mat != null) go.GetComponent<Renderer>().sharedMaterial = mat;
+        if (gate)
+        {
+            var g = go.AddComponent<Gate>();
+            g.openHeight  = gOpen;
+            g.closedColor = new Color(0.8f, 0.15f, 0.15f);
+            g.openColor   = new Color(0f, 1f, 0.96f);
+        }
+        return go;
     }
 
-    static GameObject BuildBlob(string name, Vector3 pos, Color col)
+    static void BuildButton(string name, Vector3 pos, Material baseMat, Material glowMat)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        go.name = name;
+        go.transform.position   = pos;
+        go.transform.localScale = new Vector3(1.0f, 0.06f, 1.0f); // compact button
+        if (baseMat != null) go.GetComponent<Renderer>().sharedMaterial = baseMat;
+        go.GetComponent<Collider>().isTrigger = true;
+        var btn = go.AddComponent<PressureButton>();
+        btn.pressedColor  = new Color(0f, 1f, 0.96f);
+        btn.releasedColor = new Color(0.8f, 0.15f, 0.15f);
+
+        // Small glow ring
+        var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        ring.name = name + "_Ring";
+        ring.transform.SetParent(go.transform);
+        ring.transform.localPosition = Vector3.zero;
+        ring.transform.localScale    = new Vector3(1.2f, 0.5f, 1.2f);
+        if (glowMat != null) ring.GetComponent<Renderer>().sharedMaterial = glowMat;
+        Object.DestroyImmediate(ring.GetComponent<Collider>());
+    }
+
+    static void BuildPushable(string name, Vector3 pos, Material mat)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = name; go.tag = "Pushable";
+        go.transform.position = pos;
+        go.transform.localScale = Vector3.one * 0.9f;
+        if (mat != null) go.GetComponent<Renderer>().sharedMaterial = mat;
+        var rb = go.AddComponent<Rigidbody>();
+        rb.mass = 2f; rb.linearDamping = 7f; rb.angularDamping = 12f;
+        rb.constraints = RigidbodyConstraints.FreezeRotation | RigidbodyConstraints.FreezePositionY;
+    }
+
+    static GameObject BuildBlob(string name, Vector3 pos, Color col, GameObject robotPfb)
     {
         var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        go.name = name;
-        go.tag  = "Blob";
-        go.transform.position   = pos;
+        go.name = name; go.tag = "Blob";
+        go.transform.position = pos;
         go.transform.localScale = Vector3.one * 0.85f;
-
-        var mat = GetOrCreateMat(name + "Mat", col, 0f, 0.85f, emissive: true, emCol: col * 0.35f);
-        go.GetComponent<Renderer>().sharedMaterial = mat;
-
-        go.AddComponent<Rigidbody>();           // BlobController.Awake() configures it
-        var ctrl = go.AddComponent<BlobController>();
-        ctrl.activeColor   = col;
-        ctrl.inactiveColor = new Color(col.r * 0.35f, col.g * 0.35f, col.b * 0.35f);
-
-        return go;
-    }
-
-    static GameObject BuildGate(Vector3 pos)
-    {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        go.name                 = "Gate";
-        go.transform.position   = pos;
-        go.transform.localScale = new Vector3(0.5f, 3f, 3f);
-
-        var mat = GetOrCreateMat("GateMat",
-            new Color(1f, 0.15f, 0.15f), 0.6f, 0.85f,
-            emissive: true, emCol: new Color(0.4f, 0.05f, 0.05f));
-        go.GetComponent<Renderer>().sharedMaterial = mat;
-
-        // Gate.cs requires Rigidbody via [RequireComponent] – added automatically
-        go.AddComponent<Gate>();
-        return go;
-    }
-
-    static GameObject BuildButton(Vector3 pos)
-    {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        go.name                 = "PressureButton";
-        go.transform.position   = pos;
-        go.transform.localScale = new Vector3(2f, 0.08f, 2f);
-
-        var mat = GetOrCreateMat("ButtonMat",
-            new Color(1f, 0.15f, 0.15f), 0.2f, 0.9f,
-            emissive: true, emCol: new Color(0.5f, 0.05f, 0.05f));
-        go.GetComponent<Renderer>().sharedMaterial = mat;
-
-        go.GetComponent<Collider>().isTrigger = true;
-        go.AddComponent<PressureButton>();
-        return go;
-    }
-
-    static void BuildPushable(string name, Vector3 pos)
-    {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        go.name = name;
-        go.tag  = "Pushable";
-        go.transform.position   = pos;
-        go.transform.localScale = Vector3.one * 0.9f;
-
         go.GetComponent<Renderer>().sharedMaterial =
-            GetOrCreateMat(name + "Mat", new Color(0.5f, 0.25f, 0.85f), 0.3f, 0.55f);
-
-        var rb = go.AddComponent<Rigidbody>();
-        rb.mass        = 2f;
-        rb.linearDamping        = 7f;
-        rb.angularDamping = 12f;
-        rb.constraints = RigidbodyConstraints.FreezeRotation |
-                         RigidbodyConstraints.FreezePositionY;
+            Mat(name + "Mat", col, 0f, 0.85f, true, col * 0.35f);
+        go.AddComponent<Rigidbody>();
+        var c = go.AddComponent<BlobController>();
+        c.activeColor = col;
+        c.inactiveColor = new Color(col.r * 0.35f, col.g * 0.35f, col.b * 0.35f);
+        if (robotPfb != null)
+        {
+            c.robotSpherePrefab = robotPfb;
+            c.avatarRoot = go.transform;
+            c.hideBlobMeshWhenAvatarPresent = true;
+        }
+        return go;
     }
 
-    static void BuildObstacle(string name, Vector3 pos)
-    {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        go.name                 = name;
-        go.transform.position   = pos;
-        go.transform.localScale = Vector3.one;
-        go.GetComponent<Renderer>().sharedMaterial =
-            GetOrCreateMat("ObstacleMat", new Color(0.22f, 0.12f, 0.38f), 0.2f, 0.4f);
-    }
-
-    static void BuildMergeZone(Vector3 pos)
-    {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        go.name                 = "MergeZone";
-        go.transform.position   = pos;
-        go.transform.localScale = new Vector3(3.5f, 0.05f, 3.5f);
-
-        var mat = GetOrCreateMat("MergeZoneMat",
-            Color.yellow, 0f, 1f, emissive: true, emCol: Color.yellow * 0.7f);
-        go.GetComponent<Renderer>().sharedMaterial = mat;
-
-        go.GetComponent<Collider>().isTrigger = true;
-        go.AddComponent<MergeZone>();
-    }
-
-    static void BuildStarfield()
-    {
-        var go = new GameObject("Starfield");
-        go.transform.position = new Vector3(0f, 50f, 0f);
-
-        var ps   = go.AddComponent<ParticleSystem>();
-        var main = ps.main;
-        main.loop            = true;
-        main.startLifetime   = 200f;
-        main.startSpeed      = 0f;
-        main.startSize       = new ParticleSystem.MinMaxCurve(0.06f, 0.22f);
-        main.startColor      = new ParticleSystem.MinMaxGradient(
-                                   new Color(0.8f, 0.85f, 1f, 0.9f),
-                                   Color.white);
-        main.maxParticles    = 700;
-        main.simulationSpace = ParticleSystemSimulationSpace.World;
-
-        var em = ps.emission;
-        em.rateOverTime = 0;
-        em.SetBursts(new[] { new ParticleSystem.Burst(0f, 700) });
-
-        var shape = ps.shape;
-        shape.shapeType = ParticleSystemShapeType.Box;
-        shape.scale     = new Vector3(100f, 1f, 100f);
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
-    //  Asset helpers
-    // ════════════════════════════════════════════════════════════════════════
-
-    static Material GetOrCreateMat(string name, Color col,
-        float metallic, float smooth,
-        bool emissive = false, Color emCol = default)
+    static Material Mat(string name, Color col, float metal, float smooth,
+        bool emit = false, Color emCol = default)
     {
         Directory.CreateDirectory("Assets/Materials");
-        string path = $"Assets/Materials/{name}.mat";
-
-        var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
-        if (existing != null) return existing;
-
-        var mat = new Material(Shader.Find("Standard"));
-        mat.color = col;
-        mat.SetFloat("_Metallic",   metallic);
-        mat.SetFloat("_Glossiness", smooth);
-
-        if (emissive)
-        {
-            mat.EnableKeyword("_EMISSION");
-            mat.SetColor("_EmissionColor", emCol);
-        }
-
-        AssetDatabase.CreateAsset(mat, path);
-        return mat;
+        string p = $"Assets/Materials/{name}.mat";
+        var ex = AssetDatabase.LoadAssetAtPath<Material>(p);
+        if (ex != null) AssetDatabase.DeleteAsset(p);
+        var m = new Material(Shader.Find("Standard"));
+        m.color = col;
+        m.SetFloat("_Metallic", metal);
+        m.SetFloat("_Glossiness", smooth);
+        if (emit) { m.EnableKeyword("_EMISSION"); m.SetColor("_EmissionColor", emCol); }
+        AssetDatabase.CreateAsset(m, p);
+        return m;
     }
 
     static void EnsureTag(string tag)
     {
-        var tagManager = new SerializedObject(
+        var tm = new SerializedObject(
             AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
-        var tags = tagManager.FindProperty("tags");
-
+        var tags = tm.FindProperty("tags");
         for (int i = 0; i < tags.arraySize; i++)
             if (tags.GetArrayElementAtIndex(i).stringValue == tag) return;
-
         tags.InsertArrayElementAtIndex(tags.arraySize);
         tags.GetArrayElementAtIndex(tags.arraySize - 1).stringValue = tag;
-        tagManager.ApplyModifiedProperties();
+        tm.ApplyModifiedProperties();
     }
-
-    // ── Colour palette ─────────────────────────────────────────────────────
-    static readonly Color WallColor    = new Color(0.10f, 0.10f, 0.24f);
-    static readonly Color DivColor     = new Color(0.18f, 0.08f, 0.32f);
-    static readonly Color BlobOneColor = new Color(0.15f, 0.85f, 1.00f);   // Cyan
-    static readonly Color BlobTwoColor = new Color(1.00f, 0.35f, 0.80f);   // Pink
 }

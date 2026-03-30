@@ -14,10 +14,20 @@ public class BlobController : MonoBehaviour
     public float turnSpeed = 140f;
     [Tooltip("How fast the avatar mesh catches up to facing (higher = snappier).")]
     public float avatarTurnSmoothing = 25f;
+    [Tooltip("If true, initialize facing so the avatar points toward the gate at scene start.")]
+    public bool faceGateOnStart = true;
 
-    [Header("Jump")]
-    public float jumpForce       = 8f;
+    [Header("Jump / Damping")]
+    public float jumpForce       = 6f;
     public float groundCheckDist = 0.52f;  // slightly > sphere radius (0.425)
+    [Tooltip("Extra distance for landing detection to avoid missing ground right after jump.")]
+    public float groundCheckPadding = 0.08f;
+    [Tooltip("How quickly jump squash returns to normal scale after landing.")]
+    public float jumpScaleRecoverSpeed = 16f;
+    [Tooltip("Rigidbody linear damping while grounded (snappy stops).")]
+    public float groundDamping = 5f;
+    [Tooltip("Rigidbody linear damping while airborne (smooth arcs).")]
+    public float airDamping    = 0.3f;
 
     [Header("Visuals")]
     public Color activeColor   = Color.cyan;
@@ -32,6 +42,8 @@ public class BlobController : MonoBehaviour
     public bool autoFitAvatarToBlob = true;
     public float avatarScaleMultiplier = 1f;
     public float avatarGroundOffset = 0f;
+    [Tooltip("Minimum horizontal speed required to keep walk animation active.")]
+    public float walkVelocityThreshold = 0.18f;
 
     private Rigidbody rb;
     private Renderer  rend;
@@ -115,10 +127,13 @@ public class BlobController : MonoBehaviour
         else
             facingYaw = transform.eulerAngles.y;
 
+        if (faceGateOnStart)
+            SetFacingTowardsGate();
+
         foreach (var rfa in GetComponentsInChildren<RobotFreeAnim>(true))
             rfa.disableInput = true;
 
-        rb.linearDamping  = 5f;
+        rb.linearDamping  = groundDamping;
         rb.angularDamping = 5f;
         rb.useGravity     = true;
         rb.interpolation  = RigidbodyInterpolation.Interpolate;
@@ -134,9 +149,17 @@ public class BlobController : MonoBehaviour
         isGrounded = Physics.Raycast(
             transform.position + Vector3.up * 0.05f,
             Vector3.down,
-            groundCheckDist,
+            groundCheckDist + groundCheckPadding,
             ~0,
             QueryTriggerInteraction.Ignore);
+
+        // Always recover jump squash; faster on ground, softer in air.
+        float recoverSpeed = isGrounded ? jumpScaleRecoverSpeed : jumpScaleRecoverSpeed * 0.35f;
+        transform.localScale = Vector3.Lerp(
+            transform.localScale, baseScale, Time.fixedDeltaTime * recoverSpeed);
+
+        // Smooth platforming: low drag in air preserves horizontal momentum
+        rb.linearDamping = isGrounded ? groundDamping : airDamping;
 
         if (hasJumpAnim && isGrounded)
             avatarAnim.SetBool(jumpAnimParam, false);
@@ -212,7 +235,13 @@ public class BlobController : MonoBehaviour
         }
 
         if (hasWalkAnim)
-            avatarAnim.SetBool(walkAnimParam, Mathf.Abs(input.y) > 0.05f && isGrounded);
+        {
+            float walkThresholdSq = walkVelocityThreshold * walkVelocityThreshold;
+            bool hasMoveInput = Mathf.Abs(input.y) > 0.05f;
+            bool hasPlanarSpeed = hv.sqrMagnitude > walkThresholdSq;
+            bool shouldWalk = hasMoveInput && (isGrounded || hasPlanarSpeed);
+            avatarAnim.SetBool(walkAnimParam, shouldWalk);
+        }
     }
 
     // ── Internal ───────────────────────────────────────────────────────────
@@ -231,6 +260,21 @@ public class BlobController : MonoBehaviour
         Vector3 fromYaw = Quaternion.Euler(0f, facingYaw, 0f) * Vector3.forward;
         fromYaw.y = 0f;
         return fromYaw.sqrMagnitude > 1e-6f ? fromYaw.normalized : Vector3.forward;
+    }
+
+    void SetFacingTowardsGate()
+    {
+        var gate = Object.FindAnyObjectByType<Gate>();
+        if (gate == null) return;
+
+        Vector3 toGate = gate.transform.position - transform.position;
+        toGate.y = 0f;
+        if (toGate.sqrMagnitude < 1e-6f) return;
+
+        facingYaw = Quaternion.LookRotation(toGate.normalized, Vector3.up).eulerAngles.y;
+
+        if (avatarPivot != null)
+            avatarPivot.rotation = Quaternion.Euler(0f, facingYaw, 0f);
     }
 
     void RefreshColor()

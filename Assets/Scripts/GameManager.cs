@@ -63,8 +63,8 @@ public class GameManager : MonoBehaviour
         };
 
         string mode = BlobManager.Instance.GetModeLabel();
-        GUI.Box(new Rect(12f, 12f, 420f, 64f),
-            $"Control: {mode}\n<size=12>[TAB] · [WASD] move/turn · [SPACE] jump · close = unite · [X] split (move apart before re-unite) · win on pad (2 blobs or merged)</size>", boxStyle);
+        GUI.Box(new Rect(12f, 12f, 460f, 64f),
+            $"Control: {mode}\n<size=12>[X] split/divide · [TAB] switch · [WASD] move · [SPACE] jump · approach to unite · reach exit door to win</size>", boxStyle);
     }
 
     void DrawWinScreen()
@@ -91,8 +91,8 @@ public class GameManager : MonoBehaviour
         float cx = Screen.width  * 0.5f;
         float cy = Screen.height * 0.5f;
 
-        GUI.Label(new Rect(cx - 300f, cy - 60f, 600f, 70f), "BLOBS REUNITED!",  titleStyle);
-        GUI.Label(new Rect(cx - 300f, cy + 20f, 600f, 40f), "Reloading level…", subStyle);
+        GUI.Label(new Rect(cx - 300f, cy - 60f, 600f, 70f), "ESCAPED!",  titleStyle);
+        GUI.Label(new Rect(cx - 300f, cy + 20f, 600f, 40f), "Level complete – reloading…", subStyle);
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
