@@ -8,8 +8,8 @@ public class BlobController : MonoBehaviour
 {
 
     [Header("Movement")]
-    public float moveSpeed = 11f;
-    public float maxSpeed  = 11f;
+    public float moveSpeed = 6f;
+    public float maxSpeed  = 7f;
     [Tooltip("Yaw degrees per second while holding A / D (rotate in place).")]
     public float turnSpeed = 140f;
     [Tooltip("How fast the avatar mesh catches up to facing (higher = snappier).")]
