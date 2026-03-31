@@ -1185,8 +1185,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6d6bef4a57aa74177b5b3da88f3661f7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlobController
-  moveSpeed: 12
-  maxSpeed: 10
+  moveSpeed: 8
+  maxSpeed: 6
   turnSpeed: 140
   avatarTurnSmoothing: 25
   faceGateOnStart: 1
@@ -1360,8 +1360,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6d6bef4a57aa74177b5b3da88f3661f7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlobController
-  moveSpeed: 12
-  maxSpeed: 10
+  moveSpeed: 8
+  maxSpeed: 6
   turnSpeed: 140
   avatarTurnSmoothing: 25
   faceGateOnStart: 1
