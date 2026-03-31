@@ -8,6 +8,7 @@ using UnityEngine.SceneManagement;
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
+    private static bool forceTutorialOnNextLoad = false;
 
     [Header("Level Timer")]
     [Tooltip("Time available to finish the level before game over.")]
@@ -18,6 +19,10 @@ public class GameManager : MonoBehaviour
     [Header("Tutorial")]
     [Tooltip("Show a tutorial overlay before gameplay starts.")]
     public bool showTutorialBeforeStart = true;
+
+    [Header("Exit")]
+    [Tooltip("When true, pressing Exit returns to the tutorial overlay in the current scene.")]
+    public bool exitReturnsToTutorial = true;
 
     private bool complete = false;
     private bool gameOver = false;
@@ -41,8 +46,9 @@ public class GameManager : MonoBehaviour
         panelTex = MakeTex(new Color(0.06f, 0.09f, 0.14f, 0.93f));
         accentTex = MakeTex(new Color(0.12f, 0.95f, 0.95f, 1f));
         remainingTime = Mathf.Max(1f, levelTimeLimitSeconds);
-        tutorialVisible = showTutorialBeforeStart;
+        tutorialVisible = forceTutorialOnNextLoad || showTutorialBeforeStart;
         gameplayStarted = !tutorialVisible;
+        forceTutorialOnNextLoad = false;
     }
 
     void Update()
@@ -97,9 +103,31 @@ public class GameManager : MonoBehaviour
     void OnGUI()
     {
         DrawHUD();
+        DrawExitButton();
         if (tutorialVisible) DrawTutorialScreen();
         if (complete) DrawWinScreen();
         if (gameOver) DrawGameOverScreen();
+    }
+
+    void DrawExitButton()
+    {
+        float width = 120f;
+        float height = 38f;
+        float x = Screen.width - width - 14f;
+        float y = 14f;
+
+        var exitStyle = new GUIStyle(GUI.skin.button)
+        {
+            fontSize = 16,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            normal = { textColor = Color.white, background = bgTex },
+            hover = { textColor = Color.white, background = accentTex },
+            active = { textColor = Color.white, background = accentTex }
+        };
+
+        if (GUI.Button(new Rect(x, y, width, height), "EXIT", exitStyle))
+            ExitGame();
     }
 
     void DrawHUD()
@@ -289,6 +317,22 @@ public class GameManager : MonoBehaviour
         gameOver = true;
         Debug.Log("[Blob3D] Time expired - game over.");
         Invoke(nameof(Reload), endScreenDuration);
+    }
+
+    public void ExitGame()
+    {
+        if (exitReturnsToTutorial)
+        {
+            forceTutorialOnNextLoad = true;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+            return;
+        }
+
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
     }
 
     static string FormatTime(float seconds)
