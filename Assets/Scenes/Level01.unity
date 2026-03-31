@@ -1185,7 +1185,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6d6bef4a57aa74177b5b3da88f3661f7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlobController
-  moveSpeed: 8
+  moveSpeed: 6
   maxSpeed: 6
   turnSpeed: 140
   avatarTurnSmoothing: 25
@@ -1360,7 +1360,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6d6bef4a57aa74177b5b3da88f3661f7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlobController
-  moveSpeed: 8
+  moveSpeed: 6
   maxSpeed: 6
   turnSpeed: 140
   avatarTurnSmoothing: 25
@@ -1970,6 +1970,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d66c9ff46bf4b4945a0c327f37019190, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
+  levelTimeLimitSeconds: 120
+  endScreenDuration: 3.5
+  showTutorialBeforeStart: 1
+  exitReturnsToTutorial: 1
 --- !u!4 &1872633241
 Transform:
   m_ObjectHideFlags: 0
