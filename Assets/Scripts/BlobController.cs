@@ -208,7 +208,7 @@ public class BlobController : MonoBehaviour
         }
 
         Vector3 moveDir = CharacterPlanarForward();
-        rb.AddForce(moveDir * input.y * moveSpeed, ForceMode.Acceleration);
+        rb.AddForce(moveDir * input.y * moveSpeed, ForceMode.Force);
 
         Vector3 hv = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
         if (hv.magnitude > maxSpeed)
