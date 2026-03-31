@@ -34,6 +34,9 @@ public class BlobManager : MonoBehaviour
 
     void Update()
     {
+        if (GameManager.Instance != null && !GameManager.Instance.CanAcceptPlayerInput())
+            return;
+
         if (Input.GetKeyDown(switchKey))
         {
             Mode = (ControlMode)(((int)Mode + 1) % 3);
